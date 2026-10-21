@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DARK BYTE License Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050a14;color:#e6f0ff;font-family:Arial,sans-serif;padding:16px}
+.wrap{max-width:1000px;margin:auto}h1{color:#00e5ff;font-size:20px}
+.card{background:#0a1730;border:1px solid #17406e;border-radius:12px;padding:16px;margin-bottom:14px}
+input,button{font:inherit;padding:9px 11px;border-radius:8px;border:1px solid #1f5287;background:#07122a;color:#fff}
+button{cursor:pointer;background:#0866d8;border:0}button.red{background:#c0392b}button.gray{background:#33486b}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.row label{font-size:12px;color:#9ab2d5;display:block;margin-bottom:3px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 6px;border-bottom:1px solid #17406e;text-align:left}
+.key{font-family:monospace;color:#00e5ff}.ok{color:#00d99a}.bad{color:#ff6b6b}.tw{overflow-x:auto}
+#msg{margin:8px 0;color:#ffd166;font-size:13px;word-break:break-all}.hide{display:none}
+</style></head><body><div class="wrap">
+<h1>♛ DARK BYTE — License Admin</h1>
+<div id="login" class="card"><div class="row">
+ <div><label>Username</label><input id="u" value="admin"></div>
+ <div><label>Password</label><input id="p" type="password"></div>
+ <button id="lb">Login</button></div><div id="lm" class="bad"></div></div>
+<div id="app" class="hide">
+ <div class="card"><div class="row">
+  <div><label>Customer name</label><input id="nm" placeholder="optional"></div>
+  <div><label>Days valid (0 = forever)</label><input id="dy" type="number" value="30" min="0" style="width:110px"></div>
+  <div><label>Max devices</label><input id="md" type="number" value="1" min="1" style="width:90px"></div>
+  <div><label>How many keys</label><input id="ct" type="number" value="1" min="1" max="100" style="width:90px"></div>
+  <button id="cb">Create key(s)</button><button class="gray" id="lo">Logout</button></div>
+  <div id="msg"></div></div>
+ <div class="card tw"><table><thead><tr><th>Key</th><th>Name</th><th>Status</th><th>Expires</th><th>Devices</th><th>Last used</th><th>Actions</th></tr></thead><tbody id="tb"></tbody></table></div>
+</div></div>
+<script>
+let T=sessionStorage.getItem('t')||'';const $=i=>document.getElementById(i);
+async function api(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined});
+ if(r.status===401&&u!=='/admin/api/login'){logout();throw new Error('Session expired')}const j=await r.json();if(!r.ok)throw new Error(j.error||'Error');return j}
+function show(on){$('login').classList.toggle('hide',on);$('app').classList.toggle('hide',!on)}
+function logout(){T='';sessionStorage.removeItem('t');show(false)}
+const fd=t=>t?new Date(t).toLocaleString():'—';
+async function load(){const ks=await api('GET','/admin/api/keys');const tb=$('tb');tb.innerHTML='';
+ ks.forEach(k=>{const tr=document.createElement('tr');const exp=k.expiresAt&&k.expiresAt<Date.now();
+  const st=k.disabled?['Disabled','bad']:exp?['Expired','bad']:['Active','ok'];
+  const cells=[[k.key,'key'],[k.name||'—'],[st[0],st[1]],[k.expiresAt?fd(k.expiresAt):'Never'],[k.devices.length+'/'+k.maxDevices],[fd(k.lastUsed)]];
+  cells.forEach(c=>{const td=document.createElement('td');td.textContent=c[0];if(c[1])td.className=c[1];tr.appendChild(td)});
+  const td=document.createElement('td');
+  [['Copy','gray',()=>navigator.clipboard.writeText(k.key)],
+   [k.disabled?'Enable':'Disable','gray',async()=>{await api('PATCH','/admin/api/keys/'+k.key,{disabled:!k.disabled});load()}],
+   ['Reset devices','gray',async()=>{await api('PATCH','/admin/api/keys/'+k.key,{resetDevices:true});load()}],
+   ['Delete','red',async()=>{if(confirm('Delete '+k.key+' permanently?')){await api('DELETE','/admin/api/keys/'+k.key);load()}}]
+  ].forEach(([l,c,f])=>{const b=document.createElement('button');b.textContent=l;b.className=c;b.style.margin='2px';b.onclick=f;td.appendChild(b)});
+  tr.appendChild(td);tb.appendChild(tr)})}
+$('lb').onclick=async()=>{try{const j=await api('POST','/admin/api/login',{username:$('u').value,password:$('p').value});T=j.token;sessionStorage.setItem('t',T);show(true);load()}catch(e){$('lm').textContent=e.message}};
+$('cb').onclick=async()=>{try{const j=await api('POST','/admin/api/keys',{name:$('nm').value,days:$('dy').value,maxDevices:$('md').value,count:$('ct').value});
+ $('msg').textContent='Created: '+j.created.join('  ');load()}catch(e){$('msg').textContent=e.message}};
+$('lo').onclick=logout;
+if(T){show(true);load().catch(()=>{})}
+</script></body></html>
